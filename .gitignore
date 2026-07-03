@@ -1,0 +1,12 @@
+# Bachelorarbeit (lokal, nicht versionieren)
+BA/
+main.tex
+
+# Abhängigkeiten der Web-Demo
+d3-demo/node_modules/
+
+# Editor
+.vscode/
+
+# System
+.DS_Store

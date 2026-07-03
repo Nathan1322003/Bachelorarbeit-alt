@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Approximierte Nash-Gleichgewichte in Netzwerk-Auslastungsspielen</title>
+  <link rel="stylesheet" href="node_modules/katex/dist/katex.min.css" />
+  <link rel="stylesheet" href="css/pipeline.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>Geführte Pipeline: Approximierte Nash-Gleichgewichte in Netzwerk-Auslastungsspielen</h1>
+    <p id="app-header-lead" class="app-header-lead">
+      Diese Oberfläche erklärt den roten Faden der Bachelorarbeit zur Berechnung approximierter Nash-Gleichgewichte in Netzwerk-Auslastungsspielen.
+      Zufällige Instanzen entstehen über „Zufallsnetz (komplex)“.
+      Über „Instanz bearbeiten“ können Verzögerungsfunktionen und Spielende angepasst werden.
+      Ein Zufallsnetz ist unmittelbar für die Pipeline vorbereitet.
+      Nach „Pipeline starten“ werden die Schritte im Seitenpanel mit dynamischen Animationen und Iterationen am Netzwerk beispielhaft erläutert.
+    </p>
+  </header>
+
+  <div class="app-body">
+    <nav class="toolbar toolbar-sidebar" aria-label="Werkzeugleiste">
+      <button type="button" id="btn-pipeline-abort" class="toolbar-pipeline-only" hidden>Pipeline abbrechen</button>
+      <span class="toolbar-pipeline-only toolbar-after-abort" hidden></span>
+      <span class="toolbar-idle-group">
+        <button type="button" id="btn-random">Zufallsnetz</button>
+        <span class="sep"></span>
+        <button type="button" id="btn-open-instance">Instanz bearbeiten …</button>
+      </span>
+      <span class="sep toolbar-idle-sep"></span>
+      <button type="button" id="btn-toggle-edge-costs">Verzögerung auf Kanten einblenden</button>
+      <button type="button" id="btn-pipeline-start" class="btn-pipeline-start">Pipeline starten</button>
+    </nav>
+    <aside id="pipeline-aside" class="pipeline-aside" hidden aria-label="Pipeline Inhalt">
+      <div class="pipeline-card" role="dialog" aria-labelledby="pipeline-slide-title" aria-modal="true">
+        <p id="pipeline-step-label" class="pipeline-step-label">Schritt 1: Diskretes Spiel</p>
+        <h2 id="pipeline-slide-title" class="pipeline-slide-title"></h2>
+        <div id="pipeline-slide-body" class="pipeline-slide-body"></div>
+        <p id="pipeline-slide-progress" class="pipeline-slide-progress subtle"></p>
+        <div class="pipeline-nav">
+          <button type="button" id="btn-pipeline-back" class="btn-pipeline-nav">Zurück</button>
+          <button type="button" id="btn-pipeline-fwd" class="btn-pipeline-nav btn-pipeline-nav-primary">Weiter</button>
+        </div>
+        <div id="pipeline-nav-extra" class="pipeline-nav-extra" hidden>
+          <button type="button" id="btn-pipeline-skip-all" class="btn-pipeline-nav btn-pipeline-nav-secondary">
+            Alle verbleibenden Schritte
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <div class="stage-wrap">
+      <div class="canvas-wrap">
+        <div id="graph-stage" class="graph-stage">
+          <div id="graph-player-list" class="graph-player-list" hidden aria-label="Spielende mit Start- und Zielknoten"></div>
+          <svg id="viz-svg" viewBox="0 0 800 440" tabindex="0"></svg>
+        </div>
+        <p id="graph-hint" class="subtle graph-hint">
+          Mausrad zoomt. Ziehen auf dem leeren Hintergrund verschiebt die Ansicht (auch Umschalt+Linke Taste oder mittlere Taste). Beschriftung: f = Gesamtfluss nach Wardrop, c = Kurzform von c<sub>e</sub>. Schalter in der Werkzeugleiste blendet c auf den Kanten ein oder aus.
+        </p>
+        <p id="svg-context-hint" class="svg-context-hint" aria-live="polite"></p>
+        <div id="graph-stage-actions" class="graph-stage-actions" hidden>
+          <button type="button" id="btn-pipeline-reround" class="btn-graph-stage-action" hidden>
+            Neu runden
+          </button>
+        </div>
+        <div id="graph-player-count-control" class="graph-player-count-control" hidden aria-label="Anzahl Spielende im Zufallsnetzwerk">
+          <p class="graph-player-count-lead">
+            Je nach Schritt eignen sich unterschiedlich viele Spielende, um die Methoden didaktisch zu veranschaulichen. Während der gesamten Pipeline kann die Anzahl der Spielenden beliebig angepasst werden, und das Ergebnis wird automatisch neu berechnet.
+          </p>
+          <div class="graph-player-count-toolbar">
+            <p id="graph-player-count-label" class="graph-player-count-label">Anzahl Spielende</p>
+            <div class="graph-player-count-row">
+              <input type="range" id="graph-player-count-range" min="1" max="1000" value="10" aria-labelledby="graph-player-count-label" />
+              <input type="number" id="graph-player-count-input" min="1" max="1000" value="10" aria-labelledby="graph-player-count-label" />
+            </div>
+            <div class="graph-player-count-meta">
+              <p id="graph-player-count-recommended" class="graph-player-count-recommended"></p>
+              <button type="button" id="btn-graph-player-count-apply" class="graph-player-count-apply">Empfohlen übernehmen</button>
+            </div>
+          </div>
+          <p id="graph-player-count-busy" class="graph-player-count-busy" hidden aria-live="polite">Pipeline wird neu berechnet …</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="legacy-panel-hidden" class="legacy-panel-hidden" aria-hidden="true">
+    <pre id="wardrop-summary"></pre>
+    <pre id="decomp-log"></pre>
+    <pre id="round-summary"></pre>
+    <pre id="chernoff-box"></pre>
+    <pre id="main-log"></pre>
+  </div>
+
+  <div id="explain-modal" class="modal-root" aria-hidden="true" role="dialog" aria-labelledby="explain-modal-title">
+    <div class="modal-backdrop" tabindex="-1"></div>
+    <div class="modal-panel">
+      <button type="button" class="modal-close" aria-label="Schließen">×</button>
+      <h2 id="explain-modal-title">Ausführliche Referenz</h2>
+      <p class="modal-lead">
+        Problemstellung, Definitionen und Verweise auf die Bachelorarbeit. Die geführte Pipeline startet über den Button „Pipeline starten“ in der Werkzeugleiste.
+      </p>
+
+      <section class="explain-section" id="explain-intro">
+        <h3>Problemstellung</h3>
+        <p>
+          Ein <strong>Netzwerk-Auslastungsspiel</strong> besteht aus einem gerichteten Graphen, einer Menge von Spielenden und für jede Kante einer nicht fallenden Verzögerungsfunktion c<sub>e</sub>(x), die von der Zahl x der Spielenden abhängt, die diese Kante nutzen.
+          Jede spielende Person wählt einen Pfad vom Startknoten zum Zielknoten; die <strong>eigenen Kosten</strong> sind die Summe der Verzögerungen auf den Kanten des gewählten Pfads, jeweils ausgewertet bei der dann herrschenden Auslastung aller Spielenden zusammen.
+        </p>
+        <p>
+          Nach Rosenthal besitzt jedes ungewichtete Auslastungsspiel mindestens ein <strong>reines Nash-Gleichgewicht</strong>: keine einseitige Strategieänderung einer spielenden Person verringert die eigenen Kosten.
+          Für <strong>asymmetrische</strong> Netzwerk-Auslastungsspiele ist die Berechnung eines solchen Gleichgewichts jedoch <strong>PLS-vollständig</strong>, also im Worst Case nicht effizient erwartbar.
+          Die Arbeit diskutiert auch die Schwierigkeit von ε-Approximation bei künstlichen Verzögerungen und wendet sich dann <strong>natürlichen</strong> Funktionsklassen zu.
+        </p>
+        <p>
+          Statt eines exakten Nash wird daher ein <strong>ε-approximiertes Nash-Gleichgewicht</strong> gesucht (ε &gt; 0): für jede spielende Person und jede Alternative gilt eine Relaxierung der Nash-Bedingung mit dem Faktor (1 + ε). Genauer ist dies unten unter „Definition ε-Nash“ aufgeführt.
+        </p>
+      </section>
+
+      <details class="explain-def">
+        <summary>Definition: reines Nash-Gleichgewicht (kompakt)</summary>
+        <p>
+          Eine Strategiekombination ist ein reines Nash-Gleichgewicht, wenn für jede spielende Person die eigenen Kosten bei der gewählten Strategie nicht größer sind als bei jeder anderen zulässigen Strategie, sofern die Strategien aller übrigen Spielenden festgehalten werden.
+        </p>
+      </details>
+
+      <details class="explain-def">
+        <summary>Definition: ε-approximiertes Nash-Gleichgewicht</summary>
+        <p>
+          Für ε &gt; 0 liegt ein ε-approximiertes Nash-Gleichgewicht vor, wenn für jede spielende Person und jede alternative Strategie gilt:
+          die aktuellen eigenen Kosten C sind höchstens (1 + ε) mal den Kosten, die sich bei dieser Alternative einstellen würden (bei festen Strategien der anderen).
+          Praktisch genügt die Prüfung gegen eine kostenminimale Abweichung.
+        </p>
+      </details>
+
+      <details class="explain-def">
+        <summary>Definition: Wardrop-Gleichgewicht (kontinuierlich)</summary>
+        <p>
+          Nach Relaxierung zu einem Flussmodell mit Nachfrage 1 pro spielender Person heißt ein zulässiger Multi-Commodity-Fluss Wardrop-Gleichgewicht, wenn für jede Commodity alle Pfade mit positivem Fluss dieselbe Pfadverzögerung haben und kein unbenutzter Pfad geringere Verzögerung hätte.
+          Minimierer des konvexen Optimierungsproblems aus der Relaxierung
+        </p>
+        <div class="formula-block" data-latex="\min_{f \geq 0} \sum_{e \in E} \int_0^{f_e} c_e(\tau)\,\mathrm{d}\tau"></div>
+        <p>liefern ein solches Gleichgewicht.</p>
+      </details>
+
+      <section class="explain-section">
+        <h3>Lösungsansatz in der Bachelorarbeit (Überblick)</h3>
+        <ol class="explain-ol">
+          <li>Das diskrete Spiel wird zu einem <strong>kontinuierlichen</strong> Multi-Commodity-Flow-Problem relaxiert.</li>
+          <li>Ein <strong>Wardrop-Gleichgewicht</strong> wird über dieses konvexe Optimierungsproblem berechnet.</li>
+          <li>Der Fluss wird in eine <strong>Wahrscheinlichkeitsverteilung über Pfade</strong> je spielender Person zerlegt.</li>
+          <li><strong>Randomisiertes Runden</strong> zieht unabhängig einen Pfad pro spielender Person gemäß dieser Verteilung.</li>
+          <li>Mit <strong>Chernoff-Schranken</strong> wird gezeigt, dass die Kantenlast nah am Wardrop-Fluss bleibt.</li>
+          <li>Eine <strong>Bandbedingung</strong> an die Verzögerungsfunktionen sichert, dass die Kosten dort kaum schwanken.</li>
+          <li>Für <strong>Polynome, Exponential- und M/M/1-Funktionen</strong> sowie deren punktweise Maxima ist diese Bedingung unter milden Parameteranforderungen erfüllt. Abschließend prüft ein <strong>Intervall-Checker</strong>, ob $N_e \in [l_e, u_e]$ gilt, und erlaubt bei Bedarf erneutes Ziehen.</li>
+        </ol>
+        <p class="subtle">
+          Die geführte Pipeline im Seitenpanel führt alle Schritte 1 bis 7 nacheinander aus: Einordnung des Problems, Relaxierung, numerische Minimierung eines Wardrop-Flusses, Pfadzerlegung mit schrittweiser Darstellung im Graphen, randomisiertes Runden mit Chernoff-Konzentration als Histogramm, die hinreichende Bedingung als Funktionsplot, die Funktionsklassen und abschließend die Intervallprüfung. Protokollfelder (Wardrop, Zerlegung, Rundung, Chernoff) bleiben im DOM für Hilfsmittel, sind aber standardmäßig versteckt.
+        </p>
+      </section>
+
+      <section class="explain-section explain-step" id="explain-step-1">
+        <h3>Schritt 1 im Programm: Instanz festlegen</h3>
+        <p><strong>Was ist das Problem?</strong> Ohne Graph, Kantenverzögerungen und Start- sowie Zielknoten gibt es kein Auslastungsspiel.</p>
+        <p><strong>Was ändert sich sichtbar?</strong> Knoten und Kanten im Bild; in der Tabelle die gewählten Funktionstypen. Noch kein Fluss und keine Farbkennung „grün“.</p>
+      </section>
+
+      <section class="explain-section explain-step" id="explain-step-2">
+        <h3>Schritt 2: Relaxierung zum kontinuierlichen Problem</h3>
+        <p><strong>Was ist die Idee?</strong> Statt eines reinen Pfads darf der Fluss einer Einheit sich auf mehrere Pfade verteilen; dafür wird die Zielfunktion der Relaxierung unter Flusserhalt minimiert.</p>
+        <p><strong>Was ändert sich sichtbar?</strong> Nur der Text in der geführten Pipeline; der Graph bleibt unverändert.</p>
+      </section>
+
+      <section class="explain-section explain-step" id="explain-step-3">
+        <h3>Schritt 3: Wardrop-Gleichgewicht numerisch</h3>
+        <p><strong>Was passiert rechnerisch?</strong> Ein Minimierer der Zielfunktion der Relaxierung wird numerisch angenähert; das liefert ein Wardrop-Gleichgewicht des relaxierten Modells. Das konkrete Verfahren im Programm (Frank-Wolfe) ist nur Implementierungsdetail der Demo.</p>
+        <p><strong>Geführte Pipeline:</strong> Schritte 1 bis 6 laufen im Seitenpanel mit Zurück, Weiter und bei Bedarf „Alle verbleibenden Schritte“ (Minimierungsiterationen, Pfadzerlegung, Runden). Protokolltexte liegen in versteckten Feldern.</p>
+        <p><strong>Was ändert sich sichtbar?</strong> Kanten mit positivem Gesamtfluss werden grün; in der Beschriftung erscheint f (und weiterhin c). Das ist noch der <strong>kontinuierliche</strong> Zustand vor dem Runden.</p>
+      </section>
+
+      <section class="explain-section explain-step" id="explain-step-4">
+        <h3>Schritt 4: Pfadzerlegung</h3>
+        <p><strong>Was ist die Idee?</strong> Der Wardrop-Fluss soll als Konvexkombination von Pfaden je spielender Person geschrieben werden, um danach zufällig einen Pfad zu ziehen.</p>
+        <p><strong>Was ändert sich sichtbar?</strong> In der Pipeline wird jeder Zerlegungsschritt im Graphen blau hervorgehoben; der fortlaufende Log steht im versteckten Protokollfeld.</p>
+      </section>
+
+      <section class="explain-section explain-step" id="explain-step-5">
+        <h3>Schritt 5: Randomisiertes Runden und Chernoff-Konzentration</h3>
+        <p><strong>Was ist die Idee?</strong> Unabhängig für jede spielende Person wird ein Pfad gemäß der Verteilung aus Schritt 4 gezogen. Dadurch entsteht ein festes diskretes Profil mit Kantenauslastungen in den natürlichen Zahlen (n<sub>σ</sub>(e) ∈ ℕ). Stochastisch betrachtet ist σ eine Zufallsgröße; N<sub>e</sub> := n<sub>σ</sub>(e) ist eine Summe unabhängiger Ja/Nein-Entscheidungen mit Erwartung f<sub>e</sub> (Wardrop-Fluss auf Kante e). Chernoff-Schranken liefern Konzentration um diesen Erwartungswert.</p>
+        <p><strong>Was ändert sich sichtbar?</strong> Auf der ersten Karte werden die Pfadziehungen nacheinander im Graphen eingeblendet; danach zeigt die rechte Bühne ein <strong>Histogramm</strong> der Verteilung von N<sub>e</sub> für eine Beispielkante. Ab der vierten Karte erscheint das Konzentrationsintervall [l<sub>e</sub>, u<sub>e</sub>]. Die letzten Karten verweisen auf die Bandbedingung in Schritt 6 und die abschließende Intervallprüfung am Ende der Pipeline.</p>
+      </section>
+
+      <section class="explain-section explain-step" id="explain-step-6">
+        <h3>Schritt 6: Hinreichende Bedingung</h3>
+        <p><strong>Was ist das Problem?</strong> Konzentration der Last genügt nicht; entscheidend sind die Kosten. Schwankt die Verzögerungsfunktion c<sub>e</sub> auf dem Intervall [l<sub>e</sub>, u<sub>e</sub>] zu stark, ist das Profil nicht stabil.</p>
+        <p><strong>Was ändert sich sichtbar?</strong> Die Bühne zeigt c<sub>e</sub> einer Beispielkante als Funktionsplot mit dem Konzentrationsintervall und dem Toleranzband c<sub>e</sub>(f<sub>e</sub>)/√(1+ε) … √(1+ε)·c<sub>e</sub>(f<sub>e</sub>). Eine Vergleichskarte zeigt eine zu steile Funktion, die das Band verlässt.</p>
+      </section>
+
+      <section class="explain-section explain-step" id="explain-step-7">
+        <h3>Schritt 7: Funktionsklassen und Abschluss</h3>
+        <p><strong>Was ist die Idee?</strong> Welche üblichen Verzögerungsfunktionen erfüllen die Bandbedingung? Geprüft werden Polynome (großer konstanter Term), Exponentialfunktionen (großes β), M/M/1-Verzögerungen (Sicherheitsabstand zur Kapazität) und punktweise Maxima daraus. Anschließend wird gezeigt, dass die Parameterbedingungen in der Demo-Instanz erfüllt sind. Am Ende der Pipeline prüft ein <strong>Intervall-Checker</strong> die Lasten (bei Misserfolg kann neu gezogen werden); zusammen mit den übrigen Bedingungen folgt daraus ein ε-Nash-Gleichgewicht.</p>
+        <p><strong>Was ändert sich sichtbar?</strong> Pro Klasse ein idealisierter Funktionsplot mit Band und Intervall; bei den Maxima werden beide Komponenten und ihr Schnittpunkt gezeigt. Auf der vorletzten Karte erscheint wieder der Graph mit gerundeten Pfaden und dem Intervall-Checker; die letzte Karte erläutert, warum die Demo in der Praxis fast immer erfolgreich ist.</p>
+      </section>
+    </div>
+  </div>
+
+  <div id="instance-modal" class="modal-root" aria-hidden="true" role="dialog" aria-labelledby="instance-modal-title">
+    <div class="modal-backdrop" tabindex="-1"></div>
+    <div class="modal-panel modal-panel-wide">
+      <button type="button" class="modal-close" aria-label="Schließen">×</button>
+      <h2 id="instance-modal-title">Instanz bearbeiten</h2>
+      <p class="modal-lead subtle">
+        Pro Kante: Konzentrationsintervall [l<sub>e</sub>, u<sub>e</sub>] für die Last und <strong>zulässige Parameterbereiche</strong> (Untergrenzen aus Kap. 4 der Arbeit). Liegt ein Parameter unter seiner Grenze, wird die Verzögerung auf [l<sub>e</sub>, u<sub>e</sub>] zu steil; das randomisierte Runden liefert dann keine ε-Garantie mehr. ε = 0,3.
+      </p>
+      <div id="instance-player-count-control" class="graph-player-count-control instance-player-count-control" hidden aria-label="Anzahl Spielende">
+        <p class="graph-player-count-lead">
+          Im Zufallsnetz sind viele Paare spielender Personen vorbereitet; der Regler legt fest, wie viele davon aktiv sind. Verzögerungen und Wardrop-Flüsse werden dabei angepasst, sodass Band- und Parameterbedingungen für die neue Lastverteilung gelten.
+        </p>
+        <div class="graph-player-count-toolbar">
+          <p id="instance-player-count-label" class="graph-player-count-label">Anzahl Spielende</p>
+          <div class="graph-player-count-row">
+            <input type="range" id="instance-player-count-range" min="1" max="1000" value="10" aria-labelledby="instance-player-count-label" />
+            <input type="number" id="instance-player-count-input" min="1" max="1000" value="10" aria-labelledby="instance-player-count-label" />
+          </div>
+          <div class="graph-player-count-meta">
+            <p id="instance-player-count-hint" class="graph-player-count-recommended"></p>
+          </div>
+        </div>
+        <p id="instance-player-count-busy" class="graph-player-count-busy" hidden aria-live="polite">Instanz wird neu berechnet …</p>
+      </div>
+      <h4 class="instance-section-heading">Spielende</h4>
+      <button type="button" id="btn-add-commodity" class="btn-call">Spielende hinzufügen</button>
+      <div id="commodity-list" class="instance-commodity-list"></div>
+      <h4 class="instance-table-heading">Kanten und Verzögerungen</h4>
+      <div class="instance-table-wrap">
+        <table class="instance-edge-table">
+          <thead>
+            <tr>
+              <th>Kante</th>
+              <th>Typ</th>
+              <th>f<sub>e</sub>, [l<sub>e</sub>, u<sub>e</sub>]</th>
+              <th>Parameter (zulässige Bereiche)</th>
+            </tr>
+          </thead>
+          <tbody id="edge-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="node_modules/katex/dist/katex.min.js"></script>
+  <script src="node_modules/d3/dist/d3.min.js"></script>
+  <script src="js/math-pipeline.js"></script>
+  <script src="js/app-pipeline.js"></script>
+</body>
+</html>

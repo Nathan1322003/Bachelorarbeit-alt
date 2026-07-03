@@ -1,0 +1,18 @@
+{
+  "name": "d3-demo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "npx --yes serve . -l 5173",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "d3": "^7.9.0",
+    "katex": "^0.16.11"
+  }
+}
